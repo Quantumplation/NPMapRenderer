@@ -55,7 +55,8 @@ namespace NPMapRenderer
                     {
                         aggregateReport.Players.Remove(player.Key);
                     }
-                    aggregateReport.Players.Add(player.Key, player.Value);
+                    if(!aggregateReport.Players.ContainsKey(player.Key))
+                        aggregateReport.Players.Add(player.Key, player.Value);
                 }
 
                 // Star info

@@ -67,8 +67,30 @@ namespace NPMapRenderer
                 group report by report.Turn into turn
                 select Report.Merge(turn);
 
-            foreach (var turnReport in game)
+            Report last = null;
+
+            foreach (var turnReport in game.OrderBy(x => x.Turn))
             {
+                // Fold forward the invisible stars
+                if (last != null)
+                {
+                    foreach (var star in last.Stars)
+                    {
+                        if (!turnReport.Stars.ContainsKey(star.Key))
+                        {
+                            turnReport.Stars.Add(star.Key, new Star
+                            {
+                                Name = star.Value.Name,
+                                Owner = star.Value.Owner,
+                                StillVisible = false,
+                                X = star.Value.X,
+                                Y = star.Value.Y
+                            });
+                        }
+                    }
+                }
+
+
                 var starLayer = new Bitmap(parameters.ImageWidth, parameters.ImageWidth);
                 starLayer.MakeTransparent(Color.Black);
                 var starGraphic = Graphics.FromImage(starLayer);
@@ -84,24 +106,32 @@ namespace NPMapRenderer
                     int scanningRadius = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
                     foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
                     {
-                        var pos = star.TransformedPosition(parameters);
-                        var rect = new Rectangle(
-                            pos.X - scanningRadius,
-                            pos.Y - scanningRadius,
-                            scanningRadius * 2, scanningRadius * 2);
-                        playerVisionGraphic.FillEllipse(brush, rect);
+                        if (star.StillVisible)
+                        {
+                            var pos = star.TransformedPosition(parameters);
+                            var rect = new Rectangle(
+                                (pos.X - scanningRadius),
+                                (pos.Y - scanningRadius),
+                                (scanningRadius*2), (scanningRadius*2));
+                            playerVisionGraphic.FillEllipse(brush, rect);
+                        }
                     }
+                    // And then to clear out the center
                     foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
                     {
-                        var pos = star.TransformedPosition(parameters);
-                        var rect = new Rectangle(
-                            pos.X - scanningRadius + parameters.StarStroke,
-                            pos.Y - scanningRadius + parameters.StarStroke,
-                            (scanningRadius - parameters.StarStroke) * 2, (scanningRadius - parameters.StarStroke) * 2);
-                        playerVisionGraphic.FillEllipse(clear, rect);
+                        if (star.StillVisible)
+                        {
+                            var pos = star.TransformedPosition(parameters);
+                            var rect = new Rectangle(
+                                (pos.X - scanningRadius + parameters.StarStroke),
+                                (pos.Y - scanningRadius + parameters.StarStroke),
+                                (scanningRadius - parameters.StarStroke)*2, (scanningRadius - parameters.StarStroke)*2);
+                            playerVisionGraphic.FillEllipse(clear, rect);
+                        }
                     }
                     playerVision.MakeTransparent(Color.Black);
-                    starGraphic.DrawImage(playerVision, Point.Empty);
+                    starGraphic.DrawImage(playerVision, new Rectangle(0, 0, starLayer.Width, starLayer.Height), new Rectangle(0, 0, playerVision.Width, playerVision.Height), GraphicsUnit.Pixel);
+                    playerVision.Dispose();
                 }
 
                 // Render all the stars
@@ -111,6 +141,8 @@ namespace NPMapRenderer
                 }
 
                 starLayer.Save(Path.Combine(directory, $"map_{turnReport.Turn}.png"));
+                starLayer.Dispose();
+                last = turnReport;
             }
         }
 

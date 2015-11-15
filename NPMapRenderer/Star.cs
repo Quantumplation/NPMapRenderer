@@ -12,6 +12,12 @@ namespace NPMapRenderer
         [JsonProperty("puid")]
         public int Owner { get; set; }
 
+        /// <summary>
+        /// Is the star visible? this is to indicate a star that used to be visible, and no longer is.
+        /// </summary>
+        [JsonIgnore]
+        public bool StillVisible { get; set; } = true;
+
         public double X { get; set; }
         public double Y { get; set; }
 
@@ -33,31 +39,61 @@ namespace NPMapRenderer
                 parameters.StarWidth, parameters.StarWidth);
 
             var pen = new Pen(parameters.Colors[Owner%8], parameters.StarStroke);
+            var hatched = new HatchBrush(HatchStyle.DarkDownwardDiagonal, parameters.Colors[Owner%8]);
+            var outline = new Pen(parameters.Colors[-1]);
 
             if (Owner == -1)
             {
                 graphic.FillEllipse(new SolidBrush(parameters.Colors[-1]), rect);
             }
-            switch (Owner/8)
+            else switch (Owner/8)
             {
                 case 0:
-                    graphic.DrawEllipse(pen, rect);
-                    break;
+                {
+                    if (StillVisible)
+                    {
+                        graphic.DrawEllipse(pen, rect);
+                    }
+                    else
+                    {
+                        graphic.FillEllipse(hatched, rect);
+                        graphic.DrawRectangle(outline, rect);
+                    }
+                } break;
                 case 1:
-                    graphic.DrawRectangle(pen, rect);
-                    break;
+                {
+                    if (StillVisible)
+                    {
+                        graphic.DrawRectangle(pen, rect);
+                    }
+                    else
+                    {
+                        graphic.FillRectangle(hatched, rect);
+                        graphic.DrawRectangle(outline, rect);
+                    }
+                } break;
                 case 2:
-                    var hexagon = BuildHexagon(parameters);
-                    graphic.DrawPath(pen, hexagon);
-                    break;
+                {
+                    var hexagon = BuildHexagon(parameters, true);
+                    if (StillVisible)
+                    {
+                        graphic.DrawPath(pen, hexagon);
+                    }
+                    else
+                    {
+                        graphic.FillPath(hatched, hexagon);
+                        graphic.DrawPath(outline, hexagon);
+                    }
+                } break;
                 default:
                     throw new InvalidOperationException("Renderer was only designed for 24 players");
             }
         }
 
-        private GraphicsPath BuildHexagon(ParameterSet parameters)
+        private GraphicsPath BuildHexagon(ParameterSet parameters, bool filled)
         {
             var hexagon = new GraphicsPath();
+            hexagon.FillMode = filled ? FillMode.Winding : FillMode.Alternate;
             var hexBLength = parameters.HalfStarWidth * 10;
             var hexALength = (Math.Sin(Math.PI / 6) * hexBLength);
             var hexCLength = 2 * hexALength;
@@ -74,7 +110,7 @@ namespace NPMapRenderer
             hexagon.CloseFigure();
             var translateMatrix = new Matrix();
             var position = TransformedPosition(parameters);
-            translateMatrix.Translate(position.X, position.Y);
+            translateMatrix.Translate(position.X - parameters.HalfStarWidth, position.Y - parameters.HalfStarWidth);
             translateMatrix.Scale(.1f, .1f);
             hexagon.Transform(translateMatrix);
             return hexagon;
