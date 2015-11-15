@@ -2,6 +2,9 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using Newtonsoft.Json;
+using Svg;
+using Svg.Pathing;
+using Svg.Transforms;
 
 namespace NPMapRenderer
 {
@@ -30,92 +33,93 @@ namespace NPMapRenderer
         }
 
         // See: http://www.rdwarf.com/lerickson/hex/
-        public void Draw(Graphics graphic, ParameterSet parameters)
+        public void Draw(SvgDocument svgDocument, ParameterSet parameters)
         {
             var position = TransformedPosition(parameters);
-            var rect = new Rectangle(
-                position.X - parameters.HalfStarWidth,
-                position.Y - parameters.HalfStarWidth,
-                parameters.StarWidth, parameters.StarWidth);
 
-            var pen = new Pen(parameters.Colors[Owner%8], parameters.StarStroke);
-            var hatched = new HatchBrush(HatchStyle.DarkDownwardDiagonal, parameters.Colors[Owner%8]);
-            var outline = new Pen(parameters.Colors[-1]);
+            var color = new SvgColourServer(parameters.Colors[Owner%8]);
+            var outlineColor = new SvgColourServer(parameters.Colors[-1]);
+
+            var stroke = StillVisible ? color : outlineColor;
+            // This hatch pattern should have been generated earlier
+            var fill = StillVisible ? SvgPaintServer.None : new SvgDeferredPaintServer(svgDocument, $"#hatch{Owner}");
 
             if (Owner == -1)
             {
-                graphic.FillEllipse(new SolidBrush(parameters.Colors[-1]), rect);
+                svgDocument.Children.Add(new SvgCircle
+                {
+                    CenterX = position.X,
+                    CenterY = position.Y,
+                    Radius = parameters.HalfStarWidth,
+                    Fill = new SvgColourServer(parameters.Colors[-1])
+                });
             }
             else switch (Owner/8)
             {
                 case 0:
                 {
-                    if (StillVisible)
+                    svgDocument.Children.Add(new SvgCircle
                     {
-                        graphic.DrawEllipse(pen, rect);
-                    }
-                    else
-                    {
-                        graphic.FillEllipse(hatched, rect);
-                        graphic.DrawRectangle(outline, rect);
-                    }
+                        CenterX = position.X,
+                        CenterY = position.Y,
+                        Radius = parameters.HalfStarWidth,
+                        Stroke = stroke,
+                        StrokeWidth = parameters.StarStroke,
+                        Fill = fill
+                    });
                 } break;
                 case 1:
                 {
-                    if (StillVisible)
+                    svgDocument.Children.Add(new SvgRectangle
                     {
-                        graphic.DrawRectangle(pen, rect);
-                    }
-                    else
-                    {
-                        graphic.FillRectangle(hatched, rect);
-                        graphic.DrawRectangle(outline, rect);
-                    }
+                        X = position.X - parameters.HalfStarWidth,
+                        Y = position.Y - parameters.HalfStarWidth,
+                        Width = parameters.StarWidth,
+                        Height = parameters.StarWidth,
+                        Stroke = stroke,
+                        StrokeWidth = parameters.StarStroke,
+                        Fill = fill
+                    });
                 } break;
                 case 2:
                 {
-                    var hexagon = BuildHexagon(parameters, true);
-                    if (StillVisible)
-                    {
-                        graphic.DrawPath(pen, hexagon);
-                    }
-                    else
-                    {
-                        graphic.FillPath(hatched, hexagon);
-                        graphic.DrawPath(outline, hexagon);
-                    }
+                    var hexagon = BuildHexagon(parameters);
+                    hexagon.Stroke = stroke;
+                    hexagon.StrokeWidth = parameters.StarStroke;
+                    hexagon.Fill = fill;
+                    svgDocument.Children.Add(hexagon);
                 } break;
                 default:
                     throw new InvalidOperationException("Renderer was only designed for 24 players");
             }
         }
 
-        private GraphicsPath BuildHexagon(ParameterSet parameters, bool filled)
+        private SvgPath BuildHexagon(ParameterSet parameters)
         {
-            var hexagon = new GraphicsPath();
-            hexagon.FillMode = filled ? FillMode.Winding : FillMode.Alternate;
-            var hexBLength = parameters.HalfStarWidth * 10;
+            var hexagon = new SvgPath();
+            var hexBLength = parameters.HalfStarWidth * 1;
             var hexALength = (Math.Sin(Math.PI / 6) * hexBLength);
             var hexCLength = 2 * hexALength;
             var points = new[]
             {
-                new Point(0, (int)(hexALength + hexCLength)),
-                new Point(0, (int)hexALength),
-                new Point(hexBLength, 0),
-                new Point(2 * hexBLength, (int)hexALength),
-                new Point(2 * hexBLength, (int)(hexALength + hexCLength)),
-                new Point(hexBLength, (int)(2 * hexCLength)),
+                new PointF(0f, (float)(hexALength + hexCLength)),
+                new PointF(0f, (float)hexALength), 
+                new PointF(hexBLength, 0f),
+                new PointF(2f * hexBLength, (float)hexALength),
+                new PointF(2f * hexBLength, (float)(hexALength + hexCLength)),
+                new PointF(hexBLength, (float)(2f * hexCLength)),
             };
-            hexagon.AddLines(points);
-            hexagon.CloseFigure();
-            var translateMatrix = new Matrix();
+            
+            hexagon.PathData.Add(new SvgMoveToSegment(points[0]));
+            for (var i = 0; i < 5; i++)
+            {
+                hexagon.PathData.Add(new SvgLineSegment(points[i], points[i+1]));
+            }
+            hexagon.PathData.Add(new SvgClosePathSegment());
+            
             var position = TransformedPosition(parameters);
-            translateMatrix.Translate(position.X - parameters.HalfStarWidth, position.Y - parameters.HalfStarWidth);
-            translateMatrix.Scale(.1f, .1f);
-            hexagon.Transform(translateMatrix);
+            hexagon.Transforms.Add(new SvgTranslate(position.X - parameters.HalfStarWidth, position.Y - parameters.HalfStarWidth));
             return hexagon;
         }
-
-
     }
 }

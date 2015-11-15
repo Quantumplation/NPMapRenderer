@@ -11,6 +11,6 @@ a recap of the game after it's concluded.
 ##Setup
 1. Edit App.config and enter the directory all of the dumps were saved in.
 2. Run!
-3. Each turn of the game will produce a separate PNG map of the collective
+3. Each turn of the game will produce a separate SVG map of the collective
    state of the world during that turn, according to anyone who contributed
    their data dumps.
