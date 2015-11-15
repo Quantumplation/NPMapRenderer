@@ -30,18 +30,25 @@ namespace NPMapRenderer
             }
 
             var files = Directory.GetFiles(directory, $"gamestate_*_*.json");
+            
+            // Read out all the files, and collapse them into one game state.
+            var game = 
+                (from file in files
+                let text = File.ReadAllText(file)
+                let report = TryParseState(file, text)?.Report
+                where report != null
+                group report by report.Turn into turn
+                select Report.Merge(turn)).ToList();
 
             // Feel free to tweak to your liking
             var parameters = new ParameterSet
             {
-                MinX = -5,
-                MinY = -5,
-                MaxX = 5,
-                MaxY = 5,
+                MinX = game.Min(x => x.Stars.Min(y => y.Value.X)) - 1,
+                MinY = game.Min(x => x.Stars.Min(y => y.Value.Y)) - 1,
+                MaxX = game.Max(x => x.Stars.Max(y => y.Value.X)) + 1,
+                MaxY = game.Max(x => x.Stars.Max(y => y.Value.Y)) + 1,
 
-                ImageWidth = 1000,
-                ImageHeight = 1000,
-
+                Scale = 1500,
                 StarWidth = 10,
 
                 Colors = new Dictionary<int, Color>
@@ -57,18 +64,9 @@ namespace NPMapRenderer
                     [7] = Color.Purple
                 }
             };
-            
-            // Read out all the files, and collapse them into one game state.
-            var game = 
-                from file in files
-                let text = File.ReadAllText(file)
-                let report = TryParseState(file, text)?.Report
-                where report != null
-                group report by report.Turn into turn
-                select Report.Merge(turn);
 
             Report last = null;
-
+            Console.WriteLine($"MinX: {parameters.MinX}, MinY: {parameters.MinY}, MaxX: {parameters.MaxX}, MaxY: {parameters.MaxY}");
             foreach (var turnReport in game.OrderBy(x => x.Turn))
             {
                 // Fold forward the invisible stars
@@ -91,7 +89,7 @@ namespace NPMapRenderer
                 }
 
 
-                var starLayer = new Bitmap(parameters.ImageWidth, parameters.ImageWidth);
+                var starLayer = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
                 starLayer.MakeTransparent(Color.Black);
                 var starGraphic = Graphics.FromImage(starLayer);
 
@@ -101,33 +99,30 @@ namespace NPMapRenderer
                     var playerVision = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
                     var playerVisionGraphic = Graphics.FromImage(playerVision);
                     // One pass to render the colored boundary
-                    var brush = new SolidBrush(parameters.Colors[player.Key % 8]);
+                    var pen = new Pen(parameters.Colors[player.Key % 8]);
+                    var dashed = new Pen(parameters.Colors[player.Key%8]);
+                    dashed.DashStyle = DashStyle.Dot;
                     var clear = new SolidBrush(Color.Black);
-                    int scanningRadius = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
+                    int scanningWidth = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
+                    int scanningHeight = (int)((player.Value.Tech["scanning"].Value / parameters.RangeY) * parameters.ImageHeight);
                     foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
                     {
-                        if (star.StillVisible)
-                        {
-                            var pos = star.TransformedPosition(parameters);
-                            var rect = new Rectangle(
-                                (pos.X - scanningRadius),
-                                (pos.Y - scanningRadius),
-                                (scanningRadius*2), (scanningRadius*2));
-                            playerVisionGraphic.FillEllipse(brush, rect);
-                        }
+                        var pos = star.TransformedPosition(parameters);
+                        var rect = new Rectangle(
+                            (pos.X - scanningWidth),
+                            (pos.Y - scanningHeight),
+                            (scanningWidth*2), (scanningHeight*2));
+                        playerVisionGraphic.DrawEllipse( star.StillVisible ? pen : dashed, rect);
                     }
                     // And then to clear out the center
                     foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
                     {
-                        if (star.StillVisible)
-                        {
-                            var pos = star.TransformedPosition(parameters);
-                            var rect = new Rectangle(
-                                (pos.X - scanningRadius + parameters.StarStroke),
-                                (pos.Y - scanningRadius + parameters.StarStroke),
-                                (scanningRadius - parameters.StarStroke)*2, (scanningRadius - parameters.StarStroke)*2);
-                            playerVisionGraphic.FillEllipse(clear, rect);
-                        }
+                        var pos = star.TransformedPosition(parameters);
+                        var rect = new Rectangle(
+                            (pos.X - scanningWidth + parameters.StarStroke),
+                            (pos.Y - scanningHeight + parameters.StarStroke),
+                            (scanningWidth - parameters.StarStroke)*2, (scanningHeight - parameters.StarStroke)*2);
+                        playerVisionGraphic.FillEllipse(clear, rect);
                     }
                     playerVision.MakeTransparent(Color.Black);
                     starGraphic.DrawImage(playerVision, new Rectangle(0, 0, starLayer.Width, starLayer.Height), new Rectangle(0, 0, playerVision.Width, playerVision.Height), GraphicsUnit.Pixel);
@@ -144,6 +139,8 @@ namespace NPMapRenderer
                 starLayer.Dispose();
                 last = turnReport;
             }
+            Console.WriteLine("Done");
+            Console.ReadLine();
         }
 
         private static State TryParseState(string filename, string text)
