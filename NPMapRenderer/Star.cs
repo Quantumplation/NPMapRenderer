@@ -18,8 +18,8 @@ namespace NPMapRenderer
 
         public Point TransformedPosition(ParameterSet parameters)
         {
-            var xCoord = (int)(((X - parameters.MinX) / parameters.RangeX) * (parameters.ImageWidth - parameters.StarWidth * 2)) + parameters.StarWidth;
-            var yCoord = (int)(((Y - parameters.MinY) / parameters.RangeY) * (parameters.ImageHeight - parameters.StarWidth * 2)) + parameters.StarWidth;
+            var xCoord = (int)(((X - parameters.MinX) / parameters.RangeX) * parameters.ImageWidth);
+            var yCoord = (int)(((Y - parameters.MinY) / parameters.RangeY) * parameters.ImageHeight);
             return new Point(xCoord, yCoord);
         }
 

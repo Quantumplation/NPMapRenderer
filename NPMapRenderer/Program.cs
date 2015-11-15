@@ -39,10 +39,10 @@ namespace NPMapRenderer
                 MaxX = 5,
                 MaxY = 5,
 
-                ImageWidth = 10000,
-                ImageHeight = 10000,
+                ImageWidth = 1000,
+                ImageHeight = 1000,
 
-                StarWidth = 40,
+                StarWidth = 10,
 
                 Colors = new Dictionary<int, Color>
                 {
@@ -69,16 +69,48 @@ namespace NPMapRenderer
 
             foreach (var turnReport in game)
             {
-                var map = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
-                var graphic = Graphics.FromImage(map);
-                
+                var starLayer = new Bitmap(parameters.ImageWidth, parameters.ImageWidth);
+                starLayer.MakeTransparent(Color.Black);
+                var starGraphic = Graphics.FromImage(starLayer);
+
+                // Render the player vision circles
+                foreach (var player in turnReport.Players)
+                {
+                    var playerVision = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
+                    var playerVisionGraphic = Graphics.FromImage(playerVision);
+                    // One pass to render the colored boundary
+                    var brush = new SolidBrush(parameters.Colors[player.Key % 8]);
+                    var clear = new SolidBrush(Color.Black);
+                    int scanningRadius = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
+                    foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
+                    {
+                        var pos = star.TransformedPosition(parameters);
+                        var rect = new Rectangle(
+                            pos.X - scanningRadius,
+                            pos.Y - scanningRadius,
+                            scanningRadius * 2, scanningRadius * 2);
+                        playerVisionGraphic.FillEllipse(brush, rect);
+                    }
+                    foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
+                    {
+                        var pos = star.TransformedPosition(parameters);
+                        var rect = new Rectangle(
+                            pos.X - scanningRadius + parameters.StarStroke,
+                            pos.Y - scanningRadius + parameters.StarStroke,
+                            (scanningRadius - parameters.StarStroke) * 2, (scanningRadius - parameters.StarStroke) * 2);
+                        playerVisionGraphic.FillEllipse(clear, rect);
+                    }
+                    playerVision.MakeTransparent(Color.Black);
+                    starGraphic.DrawImage(playerVision, Point.Empty);
+                }
+
                 // Render all the stars
                 foreach (var star in turnReport.Stars.Values)
                 {
-                    star.Draw(graphic, parameters);
+                    star.Draw(starGraphic, parameters);
                 }
 
-                map.Save(Path.Combine(directory, $"map_{turnReport.Turn}.png"));
+                starLayer.Save(Path.Combine(directory, $"map_{turnReport.Turn}.png"));
             }
         }
 
