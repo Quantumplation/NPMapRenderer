@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Configuration;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Svg;
+using Svg.Transforms;
 
 namespace NPMapRenderer
 {
@@ -88,55 +89,135 @@ namespace NPMapRenderer
                     }
                 }
 
+                var starSvg = new SvgDocument
+                {
+                    Width = parameters.ImageWidth,
+                    Height = parameters.ImageHeight,
+                };
+                var defs = new SvgDefinitionList();
+                starSvg.Children.Add(defs);
 
-                var starLayer = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
-                starLayer.MakeTransparent(Color.Black);
-                var starGraphic = Graphics.FromImage(starLayer);
+                // This rectangle acts as the background
+                starSvg.Children.Add(new SvgRectangle
+                {
+                    Width = parameters.ImageWidth,
+                    Height = parameters.ImageHeight,
+                    Fill = new SvgColourServer(Color.Black)
+                });
 
                 // Render the player vision circles
                 foreach (var player in turnReport.Players)
                 {
-                    var playerVision = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
-                    var playerVisionGraphic = Graphics.FromImage(playerVision);
-                    // One pass to render the colored boundary
-                    var pen = new Pen(parameters.Colors[player.Key % 8]);
-                    var dashed = new Pen(parameters.Colors[player.Key%8]);
-                    dashed.DashStyle = DashStyle.Dot;
-                    var clear = new SolidBrush(Color.Black);
-                    int scanningWidth = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
-                    int scanningHeight = (int)((player.Value.Tech["scanning"].Value / parameters.RangeY) * parameters.ImageHeight);
+                    //var playerVision = new Bitmap(parameters.ImageWidth, parameters.ImageHeight);
+                    //var playerVisionGraphic = Graphics.FromImage(playerVision);
+                    //// One pass to render the colored boundary
+                    //var pen = new Pen(parameters.Colors[player.Key % 8]);
+                    //var dashed = new Pen(parameters.Colors[player.Key%8]);
+                    //dashed.DashStyle = DashStyle.Dot;
+                    //var clear = new SolidBrush(Color.Black);
+                    //int scanningWidth = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
+                    //int scanningHeight = (int)((player.Value.Tech["scanning"].Value / parameters.RangeY) * parameters.ImageHeight);
+                    //foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
+                    //{
+                    //    var pos = star.TransformedPosition(parameters);
+                    //    var rect = new Rectangle(
+                    //        (pos.X - scanningWidth),
+                    //        (pos.Y - scanningHeight),
+                    //        (scanningWidth*2), (scanningHeight*2));
+                    //    playerVisionGraphic.DrawEllipse( star.StillVisible ? pen : dashed, rect);
+                    //}
+                    //// And then to clear out the center
+                    //foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
+                    //{
+                    //    var pos = star.TransformedPosition(parameters);
+                    //    var rect = new Rectangle(
+                    //        (pos.X - scanningWidth + parameters.StarStroke),
+                    //        (pos.Y - scanningHeight + parameters.StarStroke),
+                    //        (scanningWidth - parameters.StarStroke)*2, (scanningHeight - parameters.StarStroke)*2);
+                    //    playerVisionGraphic.FillEllipse(clear, rect);
+
+
+                    // We render a rectangle as large as the image for the player,
+                    // then mask it to make the scanning range
+                    var playerVision = new SvgRectangle
+                    {
+                        Width = parameters.ImageWidth,
+                        Height = parameters.ImageHeight,
+                        Fill = new SvgColourServer(parameters.Colors[player.Key%8])
+                    };
+                    var playerVisionMask = new SvgUnknownElement("mask")
+                    {
+                        ID = $"mask{player.Key}"
+                    };
+
+                    // We generate a hatch pattern for each player in case it needs
+                    // to be used when rendering stars
+                    // http://www.colabrativ.com/scalable-vector-graphics-svg-pattern-examples/
+                    var hatchPattern = new SvgPatternServer
+                    {
+                        ID = $"hatch{player.Key}",
+                        X = 0,
+                        Y = 0,
+                        Width = parameters.StarStroke * 2,
+                        Height = parameters.StarStroke * 2,
+                        PatternUnits = SvgCoordinateUnits.UserSpaceOnUse,
+                        PatternTransform = new SvgTransformCollection { new SvgRotate(315) }
+                    };
+                    hatchPattern.Children.Add(new SvgRectangle
+                    {
+                        X = 0,
+                        Y = 0,
+                        Width = parameters.StarStroke,
+                        Height = parameters.StarStroke * 2,
+                        Fill = playerVision.Fill
+                    });
+                    defs.Children.Add(hatchPattern);
+
+                    // The masks are put into groups to assure they render
+                    // in the proper order
+                    var lowerMask = new SvgGroup();
+                    var upperMask = new SvgGroup();
+                    playerVisionMask.Children.Add(lowerMask);
+                    playerVisionMask.Children.Add(upperMask);
+                    playerVision.CustomAttributes["mask"] = $"url(#{playerVisionMask.ID})";
+                    defs.Children.Add(playerVisionMask);
+                    
+                    int scanningRadius = (int)((player.Value.Tech["scanning"].Value / parameters.RangeX) * parameters.ImageWidth);
                     foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
                     {
-                        var pos = star.TransformedPosition(parameters);
-                        var rect = new Rectangle(
-                            (pos.X - scanningWidth),
-                            (pos.Y - scanningHeight),
-                            (scanningWidth*2), (scanningHeight*2));
-                        playerVisionGraphic.DrawEllipse( star.StillVisible ? pen : dashed, rect);
+                        if (star.StillVisible)
+                        {
+                            var pos = star.TransformedPosition(parameters);
+                            // First mask: a filled, outer circle
+                            lowerMask.Children.Add(new SvgCircle
+                            {
+                                CenterX = pos.X,
+                                CenterY = pos.Y,
+                                Radius = scanningRadius,
+                                Fill = new SvgColourServer(Color.White)
+                            });
+
+                            // Second mask: an empty, inner circle
+                            upperMask.Children.Add(new SvgCircle
+                            {
+                                CenterX = pos.X,
+                                CenterY = pos.Y,
+                                Radius = scanningRadius - parameters.StarStroke,
+                                Fill = new SvgColourServer(Color.Black)
+                            });
+                        }
                     }
-                    // And then to clear out the center
-                    foreach (var star in turnReport.Stars.Values.Where(x => x.Owner == player.Key))
-                    {
-                        var pos = star.TransformedPosition(parameters);
-                        var rect = new Rectangle(
-                            (pos.X - scanningWidth + parameters.StarStroke),
-                            (pos.Y - scanningHeight + parameters.StarStroke),
-                            (scanningWidth - parameters.StarStroke)*2, (scanningHeight - parameters.StarStroke)*2);
-                        playerVisionGraphic.FillEllipse(clear, rect);
-                    }
-                    playerVision.MakeTransparent(Color.Black);
-                    starGraphic.DrawImage(playerVision, new Rectangle(0, 0, starLayer.Width, starLayer.Height), new Rectangle(0, 0, playerVision.Width, playerVision.Height), GraphicsUnit.Pixel);
-                    playerVision.Dispose();
+                    starSvg.Children.Add(playerVision);
                 }
 
                 // Render all the stars
                 foreach (var star in turnReport.Stars.Values)
                 {
-                    star.Draw(starGraphic, parameters);
+                    star.Draw(starSvg, parameters);
                 }
+                
+                starSvg.Write(Path.Combine(directory, $"map_{turnReport.Turn}.svg"));
 
-                starLayer.Save(Path.Combine(directory, $"map_{turnReport.Turn}.png"));
-                starLayer.Dispose();
                 last = turnReport;
             }
             Console.WriteLine("Done");
