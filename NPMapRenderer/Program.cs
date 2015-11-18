@@ -50,19 +50,19 @@ namespace NPMapRenderer
                 MaxY = game.Max(x => x.Stars.Max(y => y.Value.Y)) + 1,
 
                 Scale = 1500,
-                StarWidth = 10,
+                StarWidth = 5,
 
                 Colors = new Dictionary<int, Color>
                 {
                     [-1] = Color.White,
-                    [0] = Color.Blue,
-                    [1] = Color.Cyan,
-                    [2] = Color.Green,
-                    [3] = Color.Gold,
-                    [4] = Color.DarkOrange,
-                    [5] = Color.Red,
-                    [6] = Color.DeepPink,
-                    [7] = Color.Purple
+                    [0] = Color.FromArgb(4, 51, 255),
+                    [1] = Color.FromArgb(0, 160, 223),
+                    [2] = Color.FromArgb(55, 187, 0),
+                    [3] = Color.FromArgb(255, 190, 14),
+                    [4] = Color.FromArgb(255, 98, 0),
+                    [5] = Color.FromArgb(193, 26, 0),
+                    [6] = Color.FromArgb(193, 46, 191),
+                    [7] = Color.FromArgb(97, 39, 196)
                 }
             };
 

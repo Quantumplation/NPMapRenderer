@@ -20,9 +20,11 @@ namespace NPMapRenderer
         public int ImageWidth => (int)(Scale*AspectRatio);
         public int ImageHeight => (int)(Scale);
 
-        public int StarWidth { get; set; }
-        public int HalfStarWidth => StarWidth/2;
-        public int StarStroke => StarWidth/10;
+        public float StarWidth { get; set; }
+        public float HalfStarWidth => StarWidth/2f;
+        public float StarStroke => StarWidth/3f;
+        public float StarOwnerWidth => StarWidth*2f;
+        public float HalfStarOwnerWidth => StarOwnerWidth/2f;
 
         public Dictionary<int, Color> Colors { get; set; } 
     }

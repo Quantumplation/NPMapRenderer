@@ -38,23 +38,24 @@ namespace NPMapRenderer
             var position = TransformedPosition(parameters);
 
             var color = new SvgColourServer(parameters.Colors[Owner%8]);
-            var outlineColor = new SvgColourServer(parameters.Colors[-1]);
+            var strokeDash = new SvgUnitCollection
+            {
+                StillVisible ? SvgUnit.None : new SvgUnit(parameters.StarStroke),
+                StillVisible ? SvgUnit.None : new SvgUnit(parameters.StarStroke * 2f)
+            };
 
-            var stroke = StillVisible ? color : outlineColor;
-            // This hatch pattern should have been generated earlier
-            var fill = StillVisible ? SvgPaintServer.None : new SvgDeferredPaintServer(svgDocument, $"#hatch{Owner}");
+            svgDocument.Children.Add(new SvgCircle
+            {
+                CenterX = position.X,
+                CenterY = position.Y,
+                Radius = parameters.HalfStarWidth,
+                Fill = new SvgColourServer(parameters.Colors[-1])
+            });
 
             if (Owner == -1)
-            {
-                svgDocument.Children.Add(new SvgCircle
-                {
-                    CenterX = position.X,
-                    CenterY = position.Y,
-                    Radius = parameters.HalfStarWidth,
-                    Fill = new SvgColourServer(parameters.Colors[-1])
-                });
-            }
-            else switch (Owner/8)
+                return;
+
+            switch (Owner/8)
             {
                 case 0:
                 {
@@ -62,31 +63,37 @@ namespace NPMapRenderer
                     {
                         CenterX = position.X,
                         CenterY = position.Y,
-                        Radius = parameters.HalfStarWidth,
-                        Stroke = stroke,
+                        Radius = parameters.HalfStarOwnerWidth,
+                        Stroke = color,
                         StrokeWidth = parameters.StarStroke,
-                        Fill = fill
+                        StrokeDashArray = strokeDash,
+                        StrokeLineCap = SvgStrokeLineCap.Round,
+                        Fill = SvgPaintServer.None
                     });
                 } break;
                 case 1:
                 {
                     svgDocument.Children.Add(new SvgRectangle
                     {
-                        X = position.X - parameters.HalfStarWidth,
-                        Y = position.Y - parameters.HalfStarWidth,
-                        Width = parameters.StarWidth,
-                        Height = parameters.StarWidth,
-                        Stroke = stroke,
+                        X = position.X - parameters.HalfStarOwnerWidth,
+                        Y = position.Y - parameters.HalfStarOwnerWidth,
+                        Width = parameters.StarOwnerWidth,
+                        Height = parameters.StarOwnerWidth,
+                        Stroke = color,
                         StrokeWidth = parameters.StarStroke,
-                        Fill = fill
+                        StrokeDashArray = strokeDash,
+                        StrokeLineCap = SvgStrokeLineCap.Round,
+                        Fill = SvgPaintServer.None
                     });
                 } break;
                 case 2:
                 {
                     var hexagon = BuildHexagon(parameters);
-                    hexagon.Stroke = stroke;
+                    hexagon.Stroke = color;
                     hexagon.StrokeWidth = parameters.StarStroke;
-                    hexagon.Fill = fill;
+                    hexagon.StrokeDashArray = strokeDash;
+                    hexagon.StrokeLineCap = SvgStrokeLineCap.Round;
+                    hexagon.Fill = SvgPaintServer.None;
                     svgDocument.Children.Add(hexagon);
                 } break;
                 default:
@@ -97,17 +104,17 @@ namespace NPMapRenderer
         private SvgPath BuildHexagon(ParameterSet parameters)
         {
             var hexagon = new SvgPath();
-            var hexBLength = parameters.HalfStarWidth * 1;
-            var hexALength = (Math.Sin(Math.PI / 6) * hexBLength);
-            var hexCLength = 2 * hexALength;
+            var hexBLength = parameters.HalfStarOwnerWidth;
+            var hexCLength = hexBLength / (float)Math.Sin(Math.PI / 3.0);
+            var hexALength = hexCLength / 2f;
             var points = new[]
             {
-                new PointF(0f, (float)(hexALength + hexCLength)),
-                new PointF(0f, (float)hexALength), 
+                new PointF(0f, hexALength + hexCLength),
+                new PointF(0f, hexALength), 
                 new PointF(hexBLength, 0f),
-                new PointF(2f * hexBLength, (float)hexALength),
-                new PointF(2f * hexBLength, (float)(hexALength + hexCLength)),
-                new PointF(hexBLength, (float)(2f * hexCLength)),
+                new PointF(2f * hexBLength, hexALength),
+                new PointF(2f * hexBLength, hexALength + hexCLength),
+                new PointF(hexBLength, 2f * hexCLength),
             };
             
             hexagon.PathData.Add(new SvgMoveToSegment(points[0]));
@@ -118,7 +125,8 @@ namespace NPMapRenderer
             hexagon.PathData.Add(new SvgClosePathSegment());
             
             var position = TransformedPosition(parameters);
-            hexagon.Transforms.Add(new SvgTranslate(position.X - parameters.HalfStarWidth, position.Y - parameters.HalfStarWidth));
+            hexagon.Transforms.Add(new SvgTranslate(position.X - parameters.HalfStarOwnerWidth,
+                position.Y - parameters.HalfStarOwnerWidth - hexALength / 4f));
             return hexagon;
         }
     }
