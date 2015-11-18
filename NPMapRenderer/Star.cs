@@ -21,21 +21,23 @@ namespace NPMapRenderer
         [JsonIgnore]
         public bool StillVisible { get; set; } = true;
 
-        public double X { get; set; }
-        public double Y { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
 
-
-        public Point TransformedPosition(ParameterSet parameters)
+        public PointF WorldPosition
         {
-            var xCoord = (int)(((X - parameters.MinX) / parameters.RangeX) * parameters.ImageWidth);
-            var yCoord = (int)(((Y - parameters.MinY) / parameters.RangeY) * parameters.ImageHeight);
-            return new Point(xCoord, yCoord);
+            get { return new PointF(X, Y); }
+            set
+            {
+                X = value.X;
+                Y = value.Y;
+            }
         }
 
         // See: http://www.rdwarf.com/lerickson/hex/
         public void Draw(SvgDocument svgDocument, ParameterSet parameters)
         {
-            var position = TransformedPosition(parameters);
+            var position = parameters.ToScreenPosition(WorldPosition);
 
             var color = new SvgColourServer(parameters.Colors[Owner%8]);
             var strokeDash = new SvgUnitCollection
@@ -124,7 +126,7 @@ namespace NPMapRenderer
             }
             hexagon.PathData.Add(new SvgClosePathSegment());
             
-            var position = TransformedPosition(parameters);
+            var position = parameters.ToScreenPosition(WorldPosition);
             hexagon.Transforms.Add(new SvgTranslate(position.X - parameters.HalfStarOwnerWidth,
                 position.Y - parameters.HalfStarOwnerWidth - hexALength / 4f));
             return hexagon;
